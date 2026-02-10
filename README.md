@@ -1,13 +1,16 @@
 # Testcontainers: Stop Mocking Your Database
 
-## Video Concept
-Short-form (60s) showing why mocking databases in tests gives false confidence, and how Testcontainers spins up real databases in Docker for integration tests.
+## Video Hook: Problem → Solution
+"I ran into this problem: my tests were passing, but production kept breaking on duplicate emails. Here's how I thought through it."
 
-## Key Points
-1. **Hook (0-3s):** "Your database tests are lying to you"
-2. **Problem (3-15s):** Show a mock-based test that passes but misses a real SQL constraint violation
-3. **Solution (15-45s):** Same test with Testcontainers — real MySQL/PostgreSQL in Docker, catches the bug
-4. **Payoff (45-60s):** "Real databases. Real confidence. Zero infrastructure."
+The reveal: mock tests can't enforce database constraints. Testcontainers gives you real databases in tests.
+
+## Narrative Flow
+1. **Problem (0-5s):** "My tests said everything was fine. Production said otherwise."
+2. **Show the gap (5-20s):** Mock test passes on duplicate email — the mock doesn't know about UNIQUE constraints
+3. **The thinking (20-40s):** "What if the test used a real database? But I don't want shared test environments..."
+4. **Solution (40-55s):** Testcontainers — real PostgreSQL in Docker, 10 lines of setup, catches the bug
+5. **Payoff (55-60s):** "Real databases. Real confidence. Zero infrastructure."
 
 ## Tech Stack
 - Go (using `testcontainers-go`)
@@ -30,7 +33,5 @@ go.mod
 2. Real test: `TestCreateUser_Integration` — catches the unique constraint violation
 3. Show the Testcontainers setup is ~10 lines of code
 
-## Derived From
-- scopito-core: Testcontainers setup for TiDB
-- scopito-image-db-service: Integration tests with containerized databases
-- Pattern: Real database testing without shared test environments
+## Inspired By
+Real-world experience with Testcontainers for distributed SQL and integration testing at scale.
