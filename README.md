@@ -1,37 +1,102 @@
 # Testcontainers: Stop Mocking Your Database
 
-## Video Hook: Problem → Solution
-"I ran into this problem: my tests were passing, but production kept breaking on duplicate emails. Here's how I thought through it."
+Your mock tests pass. Production breaks. Sound familiar?
 
-The reveal: mock tests can't enforce database constraints. Testcontainers gives you real databases in tests.
+Mock tests can't enforce database constraints like `UNIQUE`. Testcontainers gives you real databases in tests — no shared infrastructure, no flaky setups.
 
-## Narrative Flow
-1. **Problem (0-5s):** "My tests said everything was fine. Production said otherwise."
-2. **Show the gap (5-20s):** Mock test passes on duplicate email — the mock doesn't know about UNIQUE constraints
-3. **The thinking (20-40s):** "What if the test used a real database? But I don't want shared test environments..."
-4. **Solution (40-55s):** Testcontainers — real PostgreSQL in Docker, 10 lines of setup, catches the bug
-5. **Payoff (55-60s):** "Real databases. Real confidence. Zero infrastructure."
+## The Problem
 
-## Tech Stack
-- Go (using `testcontainers-go`)
-- PostgreSQL container
-- Simple user service with a unique constraint
+```go
+// Mock happily accepts duplicate emails
+u1, _ := mockRepo.Create(ctx, "alice@example.com", "Alice")
+u2, _ := mockRepo.Create(ctx, "alice@example.com", "Alice Again")
+// No error. Test passes. Production explodes.
+```
+
+## The Fix
+
+```go
+// Real PostgreSQL catches it immediately
+u1, _ := realRepo.Create(ctx, "alice@example.com", "Alice")
+u2, err := realRepo.Create(ctx, "alice@example.com", "Alice Again")
+// err: duplicate key value violates unique constraint "users_email_key"
+```
 
 ## Code Structure
+
 ```
-cmd/main.go              # Simple user service
+cmd/main.go                          # HTTP server with user CRUD
 internal/user/
-  repository.go          # Database operations
-  repository_test.go     # Testcontainers-based integration tests
-  repository_mock_test.go # Mock-based test (the "wrong" way)
-docker-compose.yml       # For local dev
-go.mod
+  user.go                            # User model
+  repository.go                      # PostgreSQL repository
+  repository_test.go                 # Integration tests (Testcontainers)
+  repository_mock_test.go            # Mock tests (the false positive)
+docker-compose.yml                   # Local dev database
 ```
 
-## The Demo
-1. Mock test: `TestCreateUser_Mock` — passes even with duplicate emails
-2. Real test: `TestCreateUser_Integration` — catches the unique constraint violation
-3. Show the Testcontainers setup is ~10 lines of code
+## Run the Tests
 
-## Inspired By
-Real-world experience with Testcontainers for distributed SQL and integration testing at scale.
+**Prerequisites:** Go 1.21+ and Docker running.
+
+```bash
+# Run all tests (mock + integration)
+go test -v ./...
+
+# Run only mock tests (fast, but misleading)
+go test -v -short ./...
+
+# Run only integration tests
+go test -v -run Integration ./...
+```
+
+### What You'll See
+
+| Test | Result | Why |
+|------|--------|-----|
+| `TestCreateUser_Mock` | PASS | Mock doesn't enforce UNIQUE constraint |
+| `TestCreateUser_Integration` | PASS | Real PostgreSQL rejects duplicate email |
+
+The mock test passes when it shouldn't — that's the whole point.
+
+## Run the Server
+
+```bash
+# Start PostgreSQL
+docker compose up -d
+
+# Run the server
+go run cmd/main.go
+
+# Create a user
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "name": "Alice"}'
+
+# Try duplicate — gets rejected
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "name": "Alice Again"}'
+
+# List users
+curl http://localhost:8080/users
+```
+
+## Testcontainers Setup
+
+The entire Testcontainers setup is ~10 lines:
+
+```go
+pgContainer, err := postgres.Run(ctx,
+    "postgres:16-alpine",
+    postgres.WithDatabase("testdb"),
+    postgres.WithUsername("testuser"),
+    postgres.WithPassword("testpass"),
+    testcontainers.WithWaitStrategy(
+        wait.ForLog("database system is ready to accept connections").
+            WithOccurrence(2).
+            WithStartupTimeout(30*time.Second),
+    ),
+)
+```
+
+Real databases. Real confidence. Zero infrastructure.
