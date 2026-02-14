@@ -28,14 +28,7 @@ func main() {
 	defer pool.Close()
 
 	// Ensure schema exists
-	_, err = pool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS users (
-			id         SERIAL PRIMARY KEY,
-			email      VARCHAR(255) UNIQUE NOT NULL,
-			name       VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW()
-		)
-	`)
+	_, err = pool.Exec(ctx, user.Schema)
 	if err != nil {
 		log.Fatalf("failed to create schema: %v", err)
 	}

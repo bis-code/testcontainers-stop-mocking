@@ -28,25 +28,31 @@ u2, err := realRepo.Create(ctx, "alice@example.com", "Alice Again")
 cmd/main.go                          # HTTP server with user CRUD
 internal/user/
   user.go                            # User model
-  repository.go                      # PostgreSQL repository
-  repository_test.go                 # Integration tests (Testcontainers)
+  repository.go                      # PostgreSQL repository + schema
+  repository_test.go                 # Integration tests (Testcontainers + testify/suite)
   repository_mock_test.go            # Mock tests (the false positive)
+test/testcontainers/
+  postgres.go                        # Reusable Postgres container helper
+Makefile                             # Dev and test commands
 docker-compose.yml                   # Local dev database
 ```
 
-## Run the Tests
+## Quick Start
 
 **Prerequisites:** Go 1.21+ and Docker running.
 
 ```bash
-# Run all tests (mock + integration)
-go test -v ./...
+# Run unit tests only (no Docker required)
+make unit-test
 
-# Run only mock tests (fast, but misleading)
-go test -v -short ./...
+# Run integration tests (spins up Postgres via Testcontainers)
+make integration-test
 
-# Run only integration tests
-go test -v -run Integration ./...
+# Run all tests
+make test
+
+# Start the dev server (starts infra + runs app)
+make dev
 ```
 
 ### What You'll See
@@ -54,7 +60,7 @@ go test -v -run Integration ./...
 | Test | Result | Why |
 |------|--------|-----|
 | `TestCreateUser_Mock` | PASS | Mock doesn't enforce UNIQUE constraint |
-| `TestCreateUser_Integration` | PASS | Real PostgreSQL rejects duplicate email |
+| `TestIntegrationSuite/TestCreateUser` | PASS | Real PostgreSQL rejects duplicate email |
 
 The mock test passes when it shouldn't — that's the whole point.
 
@@ -62,10 +68,10 @@ The mock test passes when it shouldn't — that's the whole point.
 
 ```bash
 # Start PostgreSQL
-docker compose up -d
+make infra-up-detached
 
 # Run the server
-go run cmd/main.go
+go run ./cmd
 
 # Create a user
 curl -X POST http://localhost:8080/users \
@@ -79,26 +85,24 @@ curl -X POST http://localhost:8080/users \
 
 # List users
 curl http://localhost:8080/users
+
+# Stop infrastructure
+make infra-down
 ```
 
-> **Note:** The compose file maps to port **5433** to avoid conflicts with a local PostgreSQL on 5432. The server defaults to 5433.
+> **Note:** The compose file maps to port **5433** to avoid conflicts with a local PostgreSQL on 5432.
 
 ## Testcontainers Setup
 
-The entire Testcontainers setup is ~10 lines:
+The container helper (`test/testcontainers/postgres.go`) is reusable across packages:
 
 ```go
-pgContainer, err := postgres.Run(ctx,
-    "postgres:16-alpine",
-    postgres.WithDatabase("testdb"),
-    postgres.WithUsername("testuser"),
-    postgres.WithPassword("testpass"),
-    testcontainers.WithWaitStrategy(
-        wait.ForLog("database system is ready to accept connections").
-            WithOccurrence(2).
-            WithStartupTimeout(30*time.Second),
-    ),
-)
+pg, err := tc.CreatePostgresContainer(ctx, user.Schema)
+defer pg.Terminate(ctx)
+
+repo := user.NewPostgresRepository(pg.Pool)
 ```
+
+Integration tests use `testify/suite` for lifecycle management — one container per suite, table truncation between tests.
 
 Real databases. Real confidence. Zero infrastructure.

@@ -7,6 +7,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Schema is the SQL DDL for the users table.
+// Exported so integration tests can apply it to a container database.
+const Schema = `
+CREATE TABLE IF NOT EXISTS users (
+	id         SERIAL PRIMARY KEY,
+	email      VARCHAR(255) UNIQUE NOT NULL,
+	name       VARCHAR(255) NOT NULL,
+	created_at TIMESTAMP DEFAULT NOW()
+);
+`
+
 // Repository defines the operations for managing users.
 type Repository interface {
 	Create(ctx context.Context, email, name string) (*User, error)
