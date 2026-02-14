@@ -81,6 +81,8 @@ curl -X POST http://localhost:8080/users \
 curl http://localhost:8080/users
 ```
 
+> **Note:** The compose file maps to port **5433** to avoid conflicts with a local PostgreSQL on 5432. The server defaults to 5433.
+
 ## Testcontainers Setup
 
 The entire Testcontainers setup is ~10 lines:
